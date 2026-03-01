@@ -13,6 +13,7 @@
     "@emotion/react": "^11.14.0",
     "@headlessui/react": "^2.2.3",
     "@mui/base": "^5.0.0-beta.70",
+    "@supabase/supabase-js": "^2.98.0",
     "@vis.gl/react-google-maps": "^1.7.1",
     "axios": "^1.9.0",
     "cally": "^0.8.0",

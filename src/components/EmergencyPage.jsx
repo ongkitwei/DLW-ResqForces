@@ -4,11 +4,30 @@ import { FaCamera } from "react-icons/fa";
 import { MdReport } from "react-icons/md";
 import { FaMagnifyingGlassLocation } from "react-icons/fa6";
 import CameraModal from "./CameraModal";
+import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
 
 function EmergencyPage() {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const router = useRouter();
+
+  async function logout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
+
   return (
     <div className="w-full flex flex-col justify-center items-center">
+      {/* ✅ TEMP logout button for testing */}
+      <div className="w-[95%] flex justify-end mt-6">
+        <button
+          onClick={logout}
+          className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-semibold shadow-sm hover:shadow-md"
+        >
+          Logout (test)
+        </button>
+      </div>
+
       <div className="flex w-full flex-row items-center justify-center gap-6 px-4">
         <div
           className="group flex flex-1 flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white p-6 shadow-md transition-all hover:scale-105 hover:shadow-lg active:scale-95 cursor-pointer"
@@ -23,7 +42,6 @@ function EmergencyPage() {
           <span className="text-xs text-slate-400 font-medium">Live Feed</span>
         </div>
 
-        {/* Report Card - Icon 45->55, Text sm->base, 10px->xs */}
         <div className="group flex flex-1 flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white p-6 shadow-md transition-all hover:scale-105 hover:shadow-lg active:scale-95 cursor-pointer">
           <div className="mb-2 text-slate-700 transition-colors group-hover:text-amber-500">
             <MdReport size={55} />
@@ -38,7 +56,6 @@ function EmergencyPage() {
       </div>
 
       <div className="flex flex-col items-center justify-center mt-16">
-        {/* The 995 Circular Button - Scaled from h-48/w-48 to h-56/w-56 */}
         <button
           className="group relative flex h-56 w-56 items-center justify-center rounded-full bg-red-500 text-white shadow-[0_0_40px_rgba(239,68,68,0.5)] transition-all hover:scale-105 hover:bg-red-600 active:scale-95"
           onClick={() => (window.location.href = "tel:995")}
