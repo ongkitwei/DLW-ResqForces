@@ -1,25 +1,27 @@
 "use client";
 import { useRef, useEffect, useState } from "react";
 import { IoClose } from "react-icons/io5";
+// 1. IMPORT YOUR ACTION
+import { classifyEmergency } from "@/app/actions/classify"; 
 
 export default function CameraModal({ isOpen, onClose }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [capturedImg, setCapturedImg] = useState(null);
+  // 2. ADD LOADING STATE
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     let stream = null;
-
     async function startCamera() {
       if (isOpen) {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: "environment",
-              // Adding these specific dimensions significantly reduces lag
               width: { ideal: 1280 },
               height: { ideal: 720 },
-              frameRate: { ideal: 30 }, // Forces a smooth 30fps
+              frameRate: { ideal: 30 },
             },
           });
           if (videoRef.current) videoRef.current.srcObject = stream;
@@ -29,10 +31,7 @@ export default function CameraModal({ isOpen, onClose }) {
         }
       }
     }
-
     startCamera();
-
-    // Cleanup: Stop camera when modal closes
     return () => {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
@@ -47,7 +46,31 @@ export default function CameraModal({ isOpen, onClose }) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       canvas.getContext("2d").drawImage(video, 0, 0);
-      setCapturedImg(canvas.toDataURL("image/png"));
+      setCapturedImg(canvas.toDataURL("image/jpeg", 0.7));    }
+  };
+
+  // 3. CREATE THE NEW HANDLER
+  const handleSendReport = async () => {
+    if (!capturedImg) return;
+    
+    setIsAnalyzing(true);
+    try {
+      // Calls your classify.js function with the captured image
+      const result = await classifyEmergency(capturedImg);
+      
+      if (result.error) {
+        alert("Analysis Error: " + result.error);
+      } else {
+        // Displays the 'Justification' from Gemini
+        alert(`🚨 STATUS: ${result.rank}\n\n📝 REASON: ${result.reason}`);
+        onClose();
+        setCapturedImg(null); // Reset for next use
+      }
+    } catch (err) {
+      console.error("Failed to send report:", err);
+      alert("System error. Check your terminal logs.");
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -56,7 +79,6 @@ export default function CameraModal({ isOpen, onClose }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="relative w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl">
-        {/* Close Button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 z-10 bg-black/50 p-2 rounded-full text-white"
@@ -65,25 +87,13 @@ export default function CameraModal({ isOpen, onClose }) {
         </button>
 
         <div className="p-6 flex flex-col items-center">
-          <h3 className="text-xl font-bold mb-4 text-slate-800">
-            Emergency Capture
-          </h3>
+          <h3 className="text-xl font-bold mb-4 text-slate-800">Emergency Capture</h3>
 
           <div className="relative w-full aspect-video bg-slate-100 rounded-2xl overflow-hidden mb-6 border-4 border-slate-200">
             {capturedImg ? (
-              <img
-                src={capturedImg}
-                alt="Captured"
-                className="w-full h-full object-cover"
-              />
+              <img src={capturedImg} alt="Captured" className="w-full h-full object-cover" />
             ) : (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
             )}
           </div>
 
@@ -101,18 +111,18 @@ export default function CameraModal({ isOpen, onClose }) {
               <>
                 <button
                   onClick={() => setCapturedImg(null)}
-                  className="flex-1 bg-slate-200 text-slate-700 py-4 rounded-xl font-bold"
+                  disabled={isAnalyzing}
+                  className="flex-1 bg-slate-200 text-slate-700 py-4 rounded-xl font-bold disabled:opacity-50"
                 >
                   RETAKE
                 </button>
                 <button
-                  onClick={() => {
-                    alert("Photo Sent!");
-                    onClose();
-                  }}
-                  className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold"
+                  // 4. UPDATE THE ONCLICK
+                  onClick={handleSendReport}
+                  disabled={isAnalyzing}
+                  className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold disabled:bg-slate-400 active:scale-95 transition-all"
                 >
-                  SEND REPORT
+                  {isAnalyzing ? "ANALYZING..." : "SEND REPORT"}
                 </button>
               </>
             )}
