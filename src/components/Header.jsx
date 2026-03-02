@@ -18,10 +18,10 @@ function Header() {
     >
       <div className="flex flex-row items-center justify-center gap-x-4">
         <Image
-          src="/resq-forces.png" // Your logo path
+          src="/resq-forces.png"
           alt="Rosterly Background"
-          className="object-cover" // Subtle 10% opacity
-          quality={50} // Optimizes performance
+          className="object-cover"
+          quality={50}
           width={95}
           height={95}
           priority

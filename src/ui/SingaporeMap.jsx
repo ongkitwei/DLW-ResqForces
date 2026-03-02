@@ -1,13 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { GrAed } from "react-icons/gr";
-import Image from "next/image";
 import { triggerLiveLocationAtom } from "@/jotai/EmergencyPageAtoms";
 import { useAtom } from "jotai";
 
@@ -19,7 +17,6 @@ const REGIONS = {
   ALL: { center: [1.3521, 103.8198], zoom: 12 },
 };
 
-// 1. Blue Dot for individual markers
 const blueAedIcon =
   typeof window !== "undefined"
     ? L.divIcon({
@@ -44,7 +41,6 @@ const createCustomClusterIcon = (cluster) => {
 };
 
 export default function SingaporeMap() {
-  //   const searchParams = useSearchParams();
   const [aedLocations, setAedLocations] = useState([]);
   const [map, setMap] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
@@ -71,7 +67,7 @@ export default function SingaporeMap() {
       goToLiveLocation();
       const timer = setTimeout(() => {
         goToLiveLocation();
-        setTriggerLiveLocation(false); // Reset the trigger
+        setTriggerLiveLocation(false);
       }, 500);
 
       return () => clearTimeout(timer);
@@ -82,14 +78,13 @@ export default function SingaporeMap() {
       const { center, zoom } = REGIONS[regionKey];
       map.flyTo(center, zoom, {
         animate: true,
-        duration: 1.5, // Seconds for the transition
+        duration: 1.5,
       });
     }
   };
 
   const goToLiveLocation = () => {
     if (!map) return;
-
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your browser");
       return;
@@ -100,10 +95,8 @@ export default function SingaporeMap() {
         const { latitude, longitude } = position.coords;
         const newPos = [latitude, longitude];
 
-        // Update state to show the marker
         setUserLocation(newPos);
 
-        // Move the map to the location
         map.flyTo(newPos, 18, {
           animate: true,
           duration: 2,

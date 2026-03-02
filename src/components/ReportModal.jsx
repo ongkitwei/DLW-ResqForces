@@ -1,9 +1,21 @@
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { MdMyLocation } from "react-icons/md";
-import { FaCarCrash, FaHeartbeat, FaQuestionCircle } from "react-icons/fa";
+import CameraModal from "./CameraModal";
+import {
+  FaCarCrash,
+  FaHeartbeat,
+  FaQuestionCircle,
+  FaCamera,
+} from "react-icons/fa";
 import { GiCampfire } from "react-icons/gi";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  geminiOutputAtom,
+  capturedImageAtom,
+} from "@/jotai/EmergencyPageAtoms";
+import { useAtom } from "jotai";
+import Image from "next/image";
 
 const MapWithNoSSR = dynamic(() => import("./ReportMap"), {
   ssr: false,
@@ -14,7 +26,6 @@ const MapWithNoSSR = dynamic(() => import("./ReportMap"), {
   ),
 });
 
-// ✅ incident -> required certs
 function requiredCertsForIncident(incidentType) {
   if (incidentType === "fire") return ["FFC", "FSM"];
   if (incidentType === "cardiac_arrest") return ["CPR", "AED"];
@@ -25,12 +36,13 @@ function requiredCertsForIncident(incidentType) {
 
 function ReportModal({ isOpen, onClose }) {
   const [position, setPosition] = useState([14.5995, 120.9842]);
-
-  // ✅ Must match DB values
   const [selectedType, setSelectedType] = useState("car_accident");
-
   const [severity, setSeverity] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+
+  const [geminiOutput, setGeminiOutput] = useAtom(geminiOutputAtom);
+  const [capturedImg, setCapturedImg] = useAtom(capturedImageAtom);
 
   const handleReportSubmit = async () => {
     setIsSubmitting(true);
@@ -39,12 +51,9 @@ function ReportModal({ isOpen, onClose }) {
     const severityLabel = severityMap[severity];
 
     try {
-      // 0) Ensure logged in
       const { data: userData, error: userErr } = await supabase.auth.getUser();
       if (userErr || !userData?.user) throw new Error("Not logged in");
       const user = userData.user;
-
-      // 1) Insert incident and RETURN the inserted row
       const { data: incident, error: incidentErr } = await supabase
         .from("incidents")
         .insert([
@@ -61,10 +70,8 @@ function ReportModal({ isOpen, onClose }) {
         .single();
 
       if (incidentErr) throw incidentErr;
-
       console.log("[Report] Inserted incident:", incident);
 
-      // 2) Determine certs needed
       const neededCerts = requiredCertsForIncident(incident.incident_type);
       console.log("[Report] neededCerts:", neededCerts);
 
@@ -76,7 +83,6 @@ function ReportModal({ isOpen, onClose }) {
         return;
       }
 
-      // 3) Find eligible responders (approved certs)
       const { data: eligible, error: eligErr } = await supabase
         .from("responder_verifications")
         .select("user_id, cert_type, status")
@@ -90,24 +96,13 @@ function ReportModal({ isOpen, onClose }) {
       const responderIds = [...new Set((eligible || []).map((r) => r.user_id))];
       console.log("[Report] responderIds:", responderIds);
 
-      // 4) Build alerts (exclude reporter)
-      //   const alertsToInsert = responderIds
-      //     .filter((rid) => rid && rid !== user.id)
-      //     .map((rid) => ({
-      //       incident_id: incident.id,
-      //       responder_id: rid,
-      //       status: "sent",
-      //     }));
-      // CHANGE IT TO THIS:
-      // Add this temporarily to see EVERYONE who is a responder
       const { data: allResponders } = await supabase
         .from("responder_verifications")
         .select("user_id, cert_type, status");
 
       console.log("DEBUG - Every single responder in DB:", allResponders);
-      // 4) Build alerts (Now excluding yourself correctly)
       const alertsToInsert = responderIds
-        .filter((rid) => rid !== user.id) // ✅ This prevents YOU from getting your own alert
+        .filter((rid) => rid !== user.id)
         .map((rid) => ({
           incident_id: incident.id,
           responder_id: rid,
@@ -116,7 +111,6 @@ function ReportModal({ isOpen, onClose }) {
 
       console.log("[Report] alertsToInsert (filtered):", alertsToInsert);
 
-      // 5) Insert alerts
       if (alertsToInsert.length > 0) {
         const { error: alertErr } = await supabase
           .from("incident_alerts")
@@ -141,10 +135,26 @@ function ReportModal({ isOpen, onClose }) {
   };
 
   useEffect(() => {
-    if (isOpen && typeof window !== "undefined" && navigator.geolocation) {
+    if (isOpen && "geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setPosition([pos.coords.latitude, pos.coords.longitude]),
-        (err) => console.error("Location access denied", err)
+        (err) => {
+          const reasons = {
+            1: "PERMISSION_DENIED",
+            2: "POSITION_UNAVAILABLE",
+            3: "TIMEOUT",
+          };
+          console.error(
+            `Location Error (${reasons[err.code] || "UNKNOWN"}):`,
+            err.message
+          );
+        },
+
+        {
+          enableHighAccuracy: false,
+          timeout: 5000,
+          maximumAge: Infinity,
+        }
       );
     }
   }, [isOpen]);
@@ -277,6 +287,40 @@ function ReportModal({ isOpen, onClose }) {
               </span>
             </div>
           </div>
+
+          <div
+            className="group flex flex-1 flex-col items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600 p-6 shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer mt-10 mb-4"
+            onClick={() => setIsCameraOpen(true)}
+          >
+            <FaCamera
+              size={50}
+              className="mb-2 text-slate-700 group-hover:text-blue-500 transition-colors"
+            />
+            <span className="text-base font-bold uppercase tracking-wide text-slate-600">
+              Camera
+            </span>
+            <span className="text-xs text-slate-400 font-medium">
+              Live Feed
+            </span>
+          </div>
+
+          {/* Only render the Image container if capturedImg has a value */}
+          {capturedImg ? (
+            <div className="relative w-full h-64 mt-8">
+              <Image
+                src={capturedImg}
+                alt="Emergency incident capture"
+                fill
+                className="object-cover rounded-lg"
+                unoptimized
+              />
+            </div>
+          ) : (
+            <div className="w-full h-64 bg-slate-100 flex items-center justify-center rounded-lg">
+              <p className="text-slate-400">No image captured</p>
+            </div>
+          )}
+          <div className="text-center pt-4">{geminiOutput}</div>
         </div>
 
         {/* Footer */}
@@ -300,6 +344,10 @@ function ReportModal({ isOpen, onClose }) {
           </button>
         </div>
       </div>
+      <CameraModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+      />
     </dialog>
   );
 }

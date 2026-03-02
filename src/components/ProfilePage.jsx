@@ -8,12 +8,8 @@ export default function ProfilePage() {
   const [file, setFile] = useState(null);
   const [msg, setMsg] = useState("");
   const [uploading, setUploading] = useState(false);
-
-  // for showing submitted certs/status
   const [loadingList, setLoadingList] = useState(true);
   const [submissions, setSubmissions] = useState([]);
-
-  // for resetting the native file input UI
   const [fileInputKey, setFileInputKey] = useState(0);
 
   const fileLabel = useMemo(() => {
@@ -36,7 +32,9 @@ export default function ProfilePage() {
 
     const { data, error } = await supabase
       .from("responder_verifications")
-      .select("id, cert_type, status, submitted_at, reviewed_at, cert_file_path")
+      .select(
+        "id, cert_type, status, submitted_at, reviewed_at, cert_file_path"
+      )
       .eq("user_id", user.id)
       .order("submitted_at", { ascending: false });
 
@@ -57,7 +55,7 @@ export default function ProfilePage() {
   function clearFile() {
     setFile(null);
     setMsg("");
-    setFileInputKey((k) => k + 1); // reset hidden input so same file can be re-picked
+    setFileInputKey((k) => k + 1);
   }
 
   async function handleUpload() {
@@ -70,7 +68,6 @@ export default function ProfilePage() {
 
     setUploading(true);
 
-    // 1) Get logged-in user
     const { data: userData, error: userErr } = await supabase.auth.getUser();
     if (userErr || !userData.user) {
       setUploading(false);
@@ -79,7 +76,6 @@ export default function ProfilePage() {
     }
     const user = userData.user;
 
-    // 2) Upload file to Storage bucket "certs"
     const cleanName = file.name.replace(/\s+/g, "_");
     const path = `${user.id}/${certType}/${Date.now()}-${cleanName}`;
 
@@ -93,13 +89,13 @@ export default function ProfilePage() {
       return;
     }
 
-    // 3) Insert DB row (pending verification)
-    const { error: insertErr } = await supabase.from("responder_verifications").insert({
-      user_id: user.id,
-      cert_type: certType,
-      cert_file_path: path,
-      // status defaults to 'pending'
-    });
+    const { error: insertErr } = await supabase
+      .from("responder_verifications")
+      .insert({
+        user_id: user.id,
+        cert_type: certType,
+        cert_file_path: path,
+      });
 
     setUploading(false);
 
@@ -110,7 +106,6 @@ export default function ProfilePage() {
 
     setMsg(`Uploaded! Status: pending verification (${certType})`);
 
-    // reset file input & refresh list
     clearFile();
     await fetchSubmissions();
   }
@@ -129,9 +124,11 @@ export default function ProfilePage() {
       whiteSpace: "nowrap",
     };
 
-    if (status === "approved") return { ...base, borderColor: "#bfe7c7", background: "#eefaf1" };
-    if (status === "rejected") return { ...base, borderColor: "#f2c1c1", background: "#fdeeee" };
-    return { ...base, borderColor: "#f0e3b3", background: "#fff8e3" }; // pending
+    if (status === "approved")
+      return { ...base, borderColor: "#bfe7c7", background: "#eefaf1" };
+    if (status === "rejected")
+      return { ...base, borderColor: "#f2c1c1", background: "#fdeeee" };
+    return { ...base, borderColor: "#f0e3b3", background: "#fff8e3" };
   }
 
   function statusText(status) {
@@ -211,7 +208,9 @@ export default function ProfilePage() {
 
           {/* Custom File Picker Box */}
           <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>Upload file (PDF/JPG/PNG)</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>
+              Upload file (PDF/JPG/PNG)
+            </div>
 
             <div
               style={{
@@ -226,7 +225,9 @@ export default function ProfilePage() {
               }}
             >
               <div style={{ display: "grid", gap: 4 }}>
-                <div style={{ fontWeight: 800 }}>{file ? "Ready to upload" : "Choose a file"}</div>
+                <div style={{ fontWeight: 800 }}>
+                  {file ? "Ready to upload" : "Choose a file"}
+                </div>
                 <div style={{ fontSize: 13, opacity: 0.8 }}>{fileLabel}</div>
               </div>
 
@@ -297,7 +298,13 @@ export default function ProfilePage() {
 
         {/* Submissions list */}
         <div style={{ marginTop: 22 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <h2 style={{ fontSize: 18, margin: 0 }}>Your submissions</h2>
             <button
               type="button"
@@ -338,11 +345,16 @@ export default function ProfilePage() {
                   <div style={{ display: "grid", gap: 4 }}>
                     <div style={{ fontWeight: 900 }}>{s.cert_type}</div>
                     <div style={{ fontSize: 12, opacity: 0.75 }}>
-                      Submitted: {s.submitted_at ? new Date(s.submitted_at).toLocaleString() : "-"}
+                      Submitted:{" "}
+                      {s.submitted_at
+                        ? new Date(s.submitted_at).toLocaleString()
+                        : "-"}
                     </div>
                   </div>
 
-                  <span style={badgeStyle(s.status)}>{statusText(s.status)}</span>
+                  <span style={badgeStyle(s.status)}>
+                    {statusText(s.status)}
+                  </span>
                 </div>
               ))}
             </div>

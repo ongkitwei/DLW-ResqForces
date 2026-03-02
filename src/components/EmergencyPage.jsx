@@ -7,11 +7,15 @@ import CameraModal from "./CameraModal";
 import ReportModal from "./ReportModal";
 import Link from "next/link";
 import { useAtom } from "jotai";
-import { triggerLiveLocationAtom } from "@/jotai/EmergencyPageAtoms";
+import {
+  triggerLiveLocationAtom,
+  capturedImageAtom,
+  geminiOutputAtom,
+} from "@/jotai/EmergencyPageAtoms";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
-// --- Helper Functions ---
 function prettyType(t) {
   const types = {
     fire: "Fire / Smoke",
@@ -66,18 +70,18 @@ function EmergencyPage() {
   const router = useRouter();
   const [, setTriggerLiveLocation] = useAtom(triggerLiveLocationAtom);
 
-  // Modal & UI States
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
-  // Incident & Alert States
   const [activeAlert, setActiveAlert] = useState(null);
   const [incidentInfo, setIncidentInfo] = useState(null);
   const [loadingIncident, setLoadingIncident] = useState(false);
 
-  // Sound Control
   const [soundEnabled, setSoundEnabled] = useState(false);
   const soundEnabledRef = useRef(false);
+
+  const [geminiOutput, setGeminiOutput] = useAtom(geminiOutputAtom);
+  const [capturedImg, setCapturedImg] = useAtom(capturedImageAtom);
 
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
@@ -89,7 +93,6 @@ function EmergencyPage() {
     audio.play().catch((e) => console.error("Audio play failed:", e));
   }
 
-  // --- Actions ---
   async function logout() {
     await supabase.auth.signOut();
     localStorage.clear();
@@ -116,7 +119,6 @@ function EmergencyPage() {
     if (!error) {
       setActiveAlert(null);
       setIncidentInfo(null);
-      // Navigate to home-page to see the map/tasks
       router.push("/home-page");
     }
   }
@@ -135,7 +137,6 @@ function EmergencyPage() {
     return taskPreview(incidentInfo?.incident_type);
   }, [incidentInfo?.incident_type]);
 
-  // --- Realtime Subscription ---
   useEffect(() => {
     let channel;
     (async () => {
@@ -144,7 +145,6 @@ function EmergencyPage() {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Check for existing pending alert
       const { data: existing } = await supabase
         .from("incident_alerts")
         .select("*")
@@ -159,24 +159,6 @@ function EmergencyPage() {
         fetchIncident(existing[0].incident_id);
       }
 
-      // 2. Subscribe to new alerts
-      //   channel = supabase
-      //     .channel("rt-incident-alerts")
-      //     .on(
-      //       "postgres_changes",
-      //       { event: "INSERT", schema: "public", table: "incident_alerts" },
-      //       (payload) => {
-      //         const row = payload.new;
-      //         if (row.responder_id === user.id && row.status === "sent") {
-      //           setActiveAlert(row);
-      //           playAlarm();
-      //           fetchIncident(row.incident_id);
-      //         }
-      //       }
-      //     )
-      //     .subscribe();
-      // Change lines 142-150 to this for testing:
-
       channel = supabase
         .channel("rt-incident-alerts")
         .on(
@@ -185,7 +167,6 @@ function EmergencyPage() {
           (payload) => {
             const row = payload.new;
 
-            // ✅ ONLY show the alert if the responder_id matches the person logged in
             if (row.responder_id === user.id && row.status === "sent") {
               setActiveAlert(row);
               playAlarm();
@@ -205,12 +186,16 @@ function EmergencyPage() {
     <div className="w-full flex flex-col justify-center items-center pb-10">
       {/* 1. Alert Popup Modal */}
       {activeAlert && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl animate-in zoom-in-95 duration-200">
-            <div className="flex items-start justify-between gap-3">
+        <div className="mt-24 fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          {/* Main Modal Card */}
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200 overflow-y-auto max-h-[90vh]">
+            {/* 1. Header Section */}
+            <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <div className="text-lg font-black">🚨 Nearby Case Alert</div>
-                <div className="mt-1 text-sm text-slate-600">
+                <div className="text-xl font-black text-slate-900">
+                  🚨 Nearby Case Alert
+                </div>
+                <div className="mt-1 text-sm text-slate-500">
                   A case near you needs support.
                 </div>
               </div>
@@ -221,58 +206,94 @@ function EmergencyPage() {
               )}
             </div>
 
-            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+            {incidentInfo && (
+              <button
+                onClick={() => {
+                  const url = `https://www.google.com/maps/dir/?api=1&destination=${incidentInfo.lat},${incidentInfo.lng}&travelmode=driving`;
+                  window.open(url, "_blank");
+                }}
+                className="flex items-center justify-center gap-3 w-full rounded-2xl bg-blue-600 py-4 font-bold text-white shadow-lg shadow-blue-100 active:scale-95 transition-all mb-4"
+              >
+                <FaMagnifyingGlassLocation size={20} />
+                NAVIGATE TO INCIDENT
+              </button>
+            )}
+
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               {loadingIncident ? (
                 <div className="text-sm text-slate-600 animate-pulse">
                   Loading case details...
                 </div>
               ) : incidentInfo ? (
                 <>
-                  <div className="text-sm font-extrabold text-slate-800">
+                  <div className="text-base font-extrabold text-slate-800">
                     {prettyType(incidentInfo.incident_type)}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="mt-1 text-xs text-slate-400">
                     Reported:{" "}
                     {new Date(incidentInfo.created_at).toLocaleString()}
                   </div>
-                  <div className="mt-2 text-xs text-slate-500 font-mono">
-                    Location: {incidentInfo.lat?.toFixed(4)},{" "}
+                  <div className="mt-1 text-xs text-slate-400 font-mono">
+                    Loc: {incidentInfo.lat?.toFixed(4)},{" "}
                     {incidentInfo.lng?.toFixed(4)}
                   </div>
                 </>
               ) : (
-                <div className="text-sm text-slate-600">
+                <div className="text-sm text-slate-500">
                   Incident details unavailable.
                 </div>
               )}
             </div>
 
-            <div className="mt-4">
-              <div className="text-sm font-extrabold text-slate-800">
+            <div className="mt-5">
+              <div className="text-sm font-extrabold text-slate-800 mb-2">
                 Assigned Tasks:
               </div>
-              <ul className="mt-2 space-y-2">
+              <ul className="space-y-2">
                 {previewTasks.map((t, idx) => (
                   <li
                     key={idx}
-                    className="flex items-start gap-2 rounded-xl border border-slate-100 bg-white p-3 text-sm text-slate-700"
+                    className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 text-sm text-slate-600 shadow-sm"
                   >
-                    <span className="text-red-500">•</span> {t}
+                    <span className="h-2 w-2 rounded-full bg-red-500 shrink-0"></span>
+                    {t}
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3">
+            {capturedImg && (
+              <div className="mt-6 space-y-3">
+                <div className="text-sm font-extrabold text-slate-800">
+                  Visual Evidence:
+                </div>
+                <div className="relative w-full aspect-video rounded-2xl overflow-hidden border-2 border-slate-100 shadow-inner">
+                  <Image
+                    src={capturedImg}
+                    alt="Emergency incident capture"
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
+                </div>
+                {geminiOutput && (
+                  <div className="p-4 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-800 leading-relaxed italic">
+                    {geminiOutput}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-8 grid grid-cols-2 gap-3">
               <button
                 onClick={declineAlert}
-                className="rounded-xl border border-slate-200 bg-white py-3 font-bold text-slate-500 active:scale-95 transition-all"
+                className="rounded-2xl border border-slate-200 bg-white py-4 font-bold text-slate-500 active:scale-95 transition-all"
               >
                 Decline
               </button>
               <button
                 onClick={acceptAlert}
-                className="rounded-xl bg-red-500 py-3 font-bold text-white shadow-lg active:scale-95 transition-all"
+                className="rounded-2xl bg-red-500 py-4 font-bold text-white shadow-lg shadow-red-100 active:scale-95 transition-all"
               >
                 Accept
               </button>
@@ -281,7 +302,6 @@ function EmergencyPage() {
         </div>
       )}
 
-      {/* 2. Top Utility Buttons */}
       <div className="w-[95%] flex justify-end gap-3 mt-6 mb-6">
         <button
           onClick={() => setSoundEnabled(!soundEnabled)}
@@ -302,7 +322,6 @@ function EmergencyPage() {
         </button>
       </div>
 
-      {/* 3. Action Cards */}
       <div className="flex w-full flex-row items-center justify-center gap-6 px-4">
         <div
           className="group flex flex-1 flex-col items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600 p-6 shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
@@ -335,7 +354,6 @@ function EmergencyPage() {
         </div>
       </div>
 
-      {/* 4. Emergency Call Button */}
       <div className="flex flex-col items-center justify-center mt-16">
         <button
           className="group relative flex h-56 w-56 items-center justify-center rounded-full bg-red-500 text-white shadow-[0_0_40px_rgba(239,68,68,0.5)] transition-all hover:scale-105 active:scale-95"
@@ -357,7 +375,6 @@ function EmergencyPage() {
         </p>
       </div>
 
-      {/* 5. AED Locator Card */}
       <div className="w-full mt-12 px-4">
         <Link href="/home-page" onClick={() => setTriggerLiveLocation(true)}>
           <div className="w-full max-w-[95%] m-auto group flex flex-col items-center justify-center rounded-2xl border border-green-100 bg-green-200 p-8 shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer">
@@ -375,7 +392,6 @@ function EmergencyPage() {
         </Link>
       </div>
 
-      {/* Modals */}
       <ReportModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}

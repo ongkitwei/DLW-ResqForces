@@ -62,7 +62,6 @@ function page() {
           priority
           className="object-cover"
         />
-        {/* Darkens the image so you can actually see your form */}
         <div className="absolute inset-0 bg-black/50" />
       </div>
 

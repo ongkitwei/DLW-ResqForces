@@ -1,15 +1,19 @@
 "use client";
 import { useRef, useEffect, useState } from "react";
 import { IoClose } from "react-icons/io5";
-// 1. IMPORT YOUR ACTION
-import { classifyEmergency } from "@/app/actions/classify"; 
+import { classifyEmergency } from "@/app/actions/classify";
+import { useAtom } from "jotai";
+import {
+  geminiOutputAtom,
+  capturedImageAtom,
+} from "@/jotai/EmergencyPageAtoms";
 
 export default function CameraModal({ isOpen, onClose }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const [capturedImg, setCapturedImg] = useState(null);
-  // 2. ADD LOADING STATE
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [geminiOutput, setGeminiOutput] = useAtom(geminiOutputAtom);
+  const [capturedImg, setCapturedImg] = useAtom(capturedImageAtom);
 
   useEffect(() => {
     let stream = null;
@@ -46,25 +50,24 @@ export default function CameraModal({ isOpen, onClose }) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       canvas.getContext("2d").drawImage(video, 0, 0);
-      setCapturedImg(canvas.toDataURL("image/jpeg", 0.7));    }
+      setCapturedImg(canvas.toDataURL("image/jpeg", 0.7));
+    }
   };
 
-  // 3. CREATE THE NEW HANDLER
   const handleSendReport = async () => {
     if (!capturedImg) return;
-    
+
     setIsAnalyzing(true);
     try {
-      // Calls your classify.js function with the captured image
       const result = await classifyEmergency(capturedImg);
-      
+
       if (result.error) {
         alert("Analysis Error: " + result.error);
       } else {
-        // Displays the 'Justification' from Gemini
-        alert(`🚨 STATUS: ${result.rank}\n\n📝 REASON: ${result.reason}`);
+        setGeminiOutput(
+          `🚨 STATUS: ${result.rank}\n\n📝 REASON: ${result.reason}`
+        );
         onClose();
-        setCapturedImg(null); // Reset for next use
       }
     } catch (err) {
       console.error("Failed to send report:", err);
@@ -87,13 +90,25 @@ export default function CameraModal({ isOpen, onClose }) {
         </button>
 
         <div className="p-6 flex flex-col items-center">
-          <h3 className="text-xl font-bold mb-4 text-slate-800">Emergency Capture</h3>
+          <h3 className="text-xl font-bold mb-4 text-slate-800">
+            Emergency Capture
+          </h3>
 
           <div className="relative w-full aspect-video bg-slate-100 rounded-2xl overflow-hidden mb-6 border-4 border-slate-200">
             {capturedImg ? (
-              <img src={capturedImg} alt="Captured" className="w-full h-full object-cover" />
+              <img
+                src={capturedImg}
+                alt="Captured"
+                className="w-full h-full object-cover"
+              />
             ) : (
-              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
             )}
           </div>
 
@@ -117,12 +132,15 @@ export default function CameraModal({ isOpen, onClose }) {
                   RETAKE
                 </button>
                 <button
-                  // 4. UPDATE THE ONCLICK
                   onClick={handleSendReport}
                   disabled={isAnalyzing}
                   className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold disabled:bg-slate-400 active:scale-95 transition-all"
                 >
-                  {isAnalyzing ? "ANALYZING..." : "SEND REPORT"}
+                  {isAnalyzing ? (
+                    <span className="loading loading-spinner loading-lg"></span>
+                  ) : (
+                    "SEND REPORT"
+                  )}
                 </button>
               </>
             )}
